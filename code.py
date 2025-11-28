@@ -1,9 +1,9 @@
 import mysql.connector as sqltor
 import time
 conn = sqltor.connect(
-    host="localhost",        
+    host="127.0.0.1",        
     user="root",             
-    password="arjun@1602",
+    password="root",
     database="rest_bus" 
 )
 
@@ -201,30 +201,61 @@ def ask_rating():
             break
     
 def gen_final_bill():
-    global current_billid,cursor,conn
-    amount = 0 
-    def amt_ordered_updater(item_sr):
-        cursor.execute("update menu set amt_ordered = amt_ordered + 1 where serial_number = %s",(item_sr,))
 
-    ## calculating amount 
-    cursor.execute(f"select item_id,item_name,cust_name from pre_bill where billid = %s",(current_billid,))
+
+    global current_billid, cursor, conn
+    amount = 0 
+
+    def amt_ordered_updater(item_sr):
+        cursor.execute("update menu set amt_ordered = amt_ordered + 1 where serial_number = %s", (item_sr,))
+
+    ## Fetching order details
+    cursor.execute("select item_id, item_name, cust_name from pre_bill where billid = %s", (current_billid,))
     items_ordered = cursor.fetchall()
-    cursor.execute("select serial_number, amount from menu")
+    cursor.execute("select serial_number, item, amount from menu")
     menu = cursor.fetchall()
 
-    ## creating list of srno of items ordered by customer
+    ## Creating list of serial numbers of items ordered
     list_items = items_ordered[0][0].strip(',').split(',')
 
-    ## calculating amount
+    ## Preparing bill details
+    bill_items = []
     for i in list_items:
         amt_ordered_updater(i)
         for k in menu:
             if int(i) == k[0]:
-                amount += k[1]
-    # creating the final bill.
-    cursor.execute("insert into final_bill (billid, amount,date,item_name,cust_name) values(%s,%s,curdate(),%s,%s)",(current_billid,amount,items_ordered[0][1],items_ordered[0][2]))
+                bill_items.append({
+                    'sr_no': k[0],
+                    'name': k[1],
+                    'price': k[2]
+                })
+                amount += k[2]
+
+    # Creating the final bill
+    cursor.execute(
+        "insert into final_bill (billid, amount, date, item_name, cust_name) values(%s, %s, curdate(), %s, %s)",
+        (current_billid, amount, items_ordered[0][1], items_ordered[0][2])
+    )
     conn.commit()
-    print(f"Sure! Your bill amount is ₹{amount}.")
+
+    # Displaying structured bill
+    print("\n" + "="*60)
+    print(f"{'BILL RECEIPT':^60}")
+    print("="*60)
+    print(f"Bill ID: {current_billid}")
+    print(f"Customer: {items_ordered[0][2]}")
+    print("="*60)
+    print(f"{'Sr.No':<8} {'Item Name':<30} {'Amount (₹)':<15}")
+    print("-"*60)
+
+    for item in bill_items:
+        print(f"{item['sr_no']:<8} {item['name']:<30} {item['price']:<15.2f}")
+
+    print("-"*60)
+    print(f"{'TOTAL':<38} ₹{amount:.2f}")
+    print("="*60)
+    print(f"{'Thank you for your order!':^60}")
+    print("="*60 + "\n")
     
 
 ## Management dashboard functions 
